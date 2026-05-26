@@ -1,11 +1,19 @@
-import { policySearch } from '../rag/policy.search';
+import { policySearch, buildContextFromResults } from '../rag/policy.search';
 
-export async function searchPolicyTool(query: string): Promise<string> {
-  const results = await policySearch(query);
+/**
+ * Retrieves policy chunks and returns a formatted context string for LLM injection.
+ * Returns empty string if no relevant documents found.
+ */
+export async function searchPolicyTool(query: string, topK: number = 3): Promise<string> {
+  const results = await policySearch(query, topK);
 
   if (results.length === 0) {
-    return "I don't have information about that policy. Please contact HR directly.";
+    console.log('[PolicyTool] No matching documents found.');
+    return '';
   }
 
-  return results.map((r) => r.content).join('\n\n');
+  const context = buildContextFromResults(results);
+  console.log(`[PolicyTool] Context length: ${context.length} chars`);
+
+  return context;
 }

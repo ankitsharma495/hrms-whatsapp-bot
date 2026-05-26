@@ -1,27 +1,46 @@
+import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
+import { Document } from './document.loader';
+
 export interface Chunk {
-  id: string;
   content: string;
-  metadata: Record<string, string>;
+  metadata: {
+    source: string;
+    chunk: number;
+  };
 }
 
-export function chunkText(text: string, chunkSize: number = 500, overlap: number = 50): string[] {
-  const chunks: string[] = [];
-  let start = 0;
+/**
+ * Splits an array of Documents into smaller chunks using LangChain's
+ * RecursiveCharacterTextSplitter with configurable size and overlap.
+ */
+export async function splitDocuments(
+  docs: Document[],
+  chunkSize: number = 1000,
+  chunkOverlap: number = 200,
+): Promise<Chunk[]> {
+  const splitter = new RecursiveCharacterTextSplitter({
+    chunkSize,
+    chunkOverlap,
+  });
 
-  while (start < text.length) {
-    const end = Math.min(start + chunkSize, text.length);
-    chunks.push(text.slice(start, end));
-    start += chunkSize - overlap;
+  const allChunks: Chunk[] = [];
+
+  for (const doc of docs) {
+    const textChunks = await splitter.splitText(doc.content);
+
+    for (let i = 0; i < textChunks.length; i++) {
+      allChunks.push({
+        content: textChunks[i],
+        metadata: {
+          source: doc.metadata.source,
+          chunk: i,
+        },
+      });
+    }
+
+    console.log(`[Chunking] ${doc.metadata.source} → ${textChunks.length} chunks`);
   }
 
-  return chunks;
-}
-
-export function chunkDocument(id: string, content: string, metadata: Record<string, string>): Chunk[] {
-  const textChunks = chunkText(content);
-  return textChunks.map((text, index) => ({
-    id: `${id}_chunk_${index}`,
-    content: text,
-    metadata,
-  }));
+  console.log(`[Chunking] Total chunks created: ${allChunks.length}`);
+  return allChunks;
 }

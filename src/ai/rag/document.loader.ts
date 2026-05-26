@@ -1,33 +1,63 @@
 // Document loader for HR policy documents
-// Reads policy files and returns raw text content
+// Reads PDF/text files and extracts raw text content
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
 
 export interface Document {
-  id: string;
   content: string;
-  metadata: Record<string, string>;
+  metadata: {
+    source: string;
+    [key: string]: string;
+  };
 }
 
-export function loadDocuments(dirPath: string): Document[] {
+/**
+ * Loads all supported files (.pdf, .txt, .md) from a directory.
+ * Uses LangChain PDFLoader for PDF extraction.
+ */
+export async function loadDocuments(dirPath: string): Promise<Document[]> {
   const docs: Document[] = [];
+  const absolutePath = path.resolve(dirPath);
 
-  if (!fs.existsSync(dirPath)) return docs;
-
-  const files = fs.readdirSync(dirPath);
-  for (const file of files) {
-    if (!file.endsWith('.txt') && !file.endsWith('.md')) continue;
-
-    const filePath = path.join(dirPath, file);
-    const content = fs.readFileSync(filePath, 'utf-8');
-
-    docs.push({
-      id: file,
-      content,
-      metadata: { source: file },
-    });
+  if (!fs.existsSync(absolutePath)) {
+    console.warn(`[DocumentLoader] Directory not found: ${absolutePath}`);
+    return docs;
   }
 
+  const files = fs.readdirSync(absolutePath);
+  const supported = files.filter(
+    (f) => f.endsWith('.pdf') || f.endsWith('.txt') || f.endsWith('.md'),
+  );
+
+  console.log(`[DocumentLoader] Found ${supported.length} files in ${absolutePath}`);
+
+  for (const file of supported) {
+    const filePath = path.join(absolutePath, file);
+
+    try {
+      let content: string;
+
+      if (file.endsWith('.pdf')) {
+        const loader = new PDFLoader(filePath, { splitPages: false });
+        const pages = await loader.load();
+        content = pages.map((p) => p.pageContent).join('\n');
+      } else {
+        content = fs.readFileSync(filePath, 'utf-8');
+      }
+
+      console.log(`[DocumentLoader] Loaded: ${file} (${content.length} chars)`);
+
+      docs.push({
+        content,
+        metadata: { source: file },
+      });
+    } catch (err) {
+      console.error(`[DocumentLoader] Failed to load ${file}:`, err);
+    }
+  }
+
+  console.log(`[DocumentLoader] Total documents loaded: ${docs.length}`);
   return docs;
 }
