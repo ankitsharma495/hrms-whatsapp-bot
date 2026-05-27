@@ -24,6 +24,9 @@ export const whatsappService = {
     if (!res.ok) {
       const error = await res.text();
       console.error('WhatsApp send error:', error);
+    } else {
+      const data = await res.json();
+      console.log('Twilio response:', data.sid, data.status);
     }
   },
 };
