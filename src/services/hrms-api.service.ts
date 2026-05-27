@@ -1,21 +1,40 @@
 const HRMS_API_URL = process.env.HRMS_API_URL || 'http://localhost:3001';
 const HRMS_API_KEY = process.env.HRMS_API_KEY || '';
 
-async function hrmsGet(path: string): Promise<any> {
-  const res = await fetch(`${HRMS_API_URL}${path}`, {
-    headers: { 'x-api-key': HRMS_API_KEY },
-  });
-  const text = await res.text();
-  try {
-    return JSON.parse(text);
-  } catch {
-    console.error(`HRMS API returned non-JSON (${res.status}):`, text.substring(0, 200));
-    throw new Error('HRMS backend is unavailable. Please try again in a moment.');
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 5000; // 5 seconds
+
+function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function fetchWithRetry(url: string, options: RequestInit): Promise<any> {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const res = await fetch(url, options);
+    const text = await res.text();
+    try {
+      return { parsed: JSON.parse(text), status: res.status, ok: res.ok };
+    } catch {
+      console.error(`HRMS API attempt ${attempt}/${MAX_RETRIES} returned non-JSON (${res.status}):`, text.substring(0, 200));
+      if (attempt < MAX_RETRIES) {
+        console.log(`Retrying in ${RETRY_DELAY / 1000}s...`);
+        await delay(RETRY_DELAY);
+      } else {
+        throw new Error('HRMS backend is unavailable. Please try again in a moment.');
+      }
+    }
   }
 }
 
+async function hrmsGet(path: string): Promise<any> {
+  const result = await fetchWithRetry(`${HRMS_API_URL}${path}`, {
+    headers: { 'x-api-key': HRMS_API_KEY },
+  });
+  return result.parsed;
+}
+
 async function hrmsPost(path: string, body: any): Promise<{ ok: boolean; status: number; data: any }> {
-  const res = await fetch(`${HRMS_API_URL}${path}`, {
+  const result = await fetchWithRetry(`${HRMS_API_URL}${path}`, {
     method: 'POST',
     headers: {
       'x-api-key': HRMS_API_KEY,
@@ -23,15 +42,7 @@ async function hrmsPost(path: string, body: any): Promise<{ ok: boolean; status:
     },
     body: JSON.stringify(body),
   });
-  const text = await res.text();
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    console.error(`HRMS API returned non-JSON (${res.status}):`, text.substring(0, 200));
-    throw new Error('HRMS backend is unavailable. Please try again in a moment.');
-  }
-  return { ok: res.ok, status: res.status, data };
+  return { ok: result.ok, status: result.status, data: result.parsed };
 }
 
 export const hrmsApiService = {
