@@ -27,8 +27,14 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
     await whatsappService.sendMessage(from, reply);
     console.log('Message sent successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('Webhook error:', error);
+    try {
+      const from = req.body.From || '';
+      await whatsappService.sendMessage(from, error.message || 'Something went wrong. Please try again.');
+    } catch (e) {
+      console.error('Failed to send error message:', e);
+    }
   }
 });
 

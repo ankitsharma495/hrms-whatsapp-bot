@@ -5,7 +5,13 @@ async function hrmsGet(path: string): Promise<any> {
   const res = await fetch(`${HRMS_API_URL}${path}`, {
     headers: { 'x-api-key': HRMS_API_KEY },
   });
-  return res.json();
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    console.error(`HRMS API returned non-JSON (${res.status}):`, text.substring(0, 200));
+    throw new Error('HRMS backend is unavailable. Please try again in a moment.');
+  }
 }
 
 async function hrmsPost(path: string, body: any): Promise<{ ok: boolean; status: number; data: any }> {
@@ -17,7 +23,15 @@ async function hrmsPost(path: string, body: any): Promise<{ ok: boolean; status:
     },
     body: JSON.stringify(body),
   });
-  return { ok: res.ok, status: res.status, data: await res.json() };
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    console.error(`HRMS API returned non-JSON (${res.status}):`, text.substring(0, 200));
+    throw new Error('HRMS backend is unavailable. Please try again in a moment.');
+  }
+  return { ok: res.ok, status: res.status, data };
 }
 
 export const hrmsApiService = {
